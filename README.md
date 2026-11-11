@@ -1,12 +1,12 @@
 # TaskFlow
 
-TaskFlow is a multi-tier, containerized task management application designed to streamline workflow tracking, team collaboration, and task lifecycle management. This repository follows a microservices/multi-container architecture, separating concerns between the client-facing frontend, the core backend API, and persistent data storage.
+TaskFlow is a multi-tier task management application designed for workflow tracking, team collaboration, and task lifecycle management. The application follows a microservices-inspired architecture, separating the client-facing user interface, the core backend API service, and persistent relational data storage.
 
 ---
 
-## System Architecture & Data Flow
+## Architecture & System Overview
 
-TaskFlow operates on a classic 3-tier application architecture communicating over an internal Docker bridge network:
+The application is structured around a traditional three-tier architecture where services communicate over an internal network:
 
 ```
 +------------------+         REST API         +------------------+         SQL / TCP         +------------------+
@@ -16,91 +16,93 @@ TaskFlow operates on a classic 3-tier application architecture communicating ove
 +------------------+          JSON            +------------------+          Data            +------------------+
 ```
 
-1. **Frontend Layer**: Serves the user interface, handling user interactions, routing, and rendering task boards. It communicates asynchronously with the backend via HTTP/REST requests.
-2. **Backend API Layer**: Processes incoming business logic, validates payloads, manages authentication, and executes database queries. 
-3. **Database Layer**: Persists user profiles, task states, metadata, and relational constraints securely using a managed relational database engine.
+1. **Frontend Layer**: Client-side single-page application responsible for rendering the user interface, managing local UI state, and interacting with the backend API via asynchronous HTTP requests.
+2. **Backend API Layer**: Core application server that exposes RESTful endpoints, handles business logic, validates payloads, enforces authentication/authorization, and executes database operations.
+3. **Database Layer**: Relational data store persisting users, tasks, categories, and application state.
 
 ---
 
-## Services Breakdown & Containerization Guide
+## Repository Structure
 
-Since the `Dockerfile` for each service has been removed, use the specifications below to understand what each service requires and how to construct your custom Dockerfiles.
-
-### 1. Frontend Service (`/frontend`)
-* **Role**: Client-side application interface.
-* **Tech Stack**: Typically built with a modern frontend framework (e.g., React/Vite, Vue, or Next.js) or static HTML/JS/CSS assets.
-* **How it Works**: 
-  * In development, it runs a hot-reloading dev server.
-  * In production, source files must be compiled/bundled into static HTML, JS, and CSS artifacts, then served via a high-performance web server like **Nginx**.
-* **Dockerfile Requirements for Your Implementation**:
-  * **Multi-stage build recommended**: 
-    1. *Build Stage*: Use a node base image (`node:alpine`), copy `package.json` and lock files, run `npm install`, copy source code, and run the build command (e.g., `npm run build`).
-    2. *Production Stage*: Use a lightweight web server image (`nginx:alpine`), copy the compiled static assets from the build stage into Nginx's public directory (`/usr/share/nginx/html`), and expose port `80`.
+```
+TaskFlow/
+├── frontend/           # Client-side application source code
+├── backend/            # Server-side API application source code
+└── db/                 # Database initialization scripts and configuration
+```
 
 ---
 
-### 2. Backend Service (`/backend`)
-* **Role**: Core application server handling REST endpoints, middleware, and database ORM/drivers.
-* **Tech Stack**: Typically built using Node.js (Express), Python (FastAPI/Flask), or Go.
-* **How it Works**:
-  * Listens on a designated TCP port (e.g., `5000` or `3000`).
-  * Connects to the database using environment variables for host, port, user, password, and database name.
-  * Runs database migrations or initializes connection pools upon startup.
-* **Dockerfile Requirements for Your Implementation**:
-  * Choose an appropriate official runtime base image (e.g., `node:18-alpine`, `python:3.11-slim`, or `golang:1.21-alpine`).
-  * Set a working directory inside the container (`/app`).
-  * Copy dependency manifests first to leverage Docker layer caching, then install dependencies.
-  * Copy the remaining source code.
-  * Define the correct container entrypoint or startup command (e.g., `CMD ["node", "src/index.js"]` or `CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]`).
-  * Expose the application port.
+## Services & Technical Requirements
 
----
+### 1. Frontend (`/frontend`)
+* **Description**: The user interface layer built with modern web technologies.
+* **Dependencies & Runtime**: 
+  * Node.js runtime environment (e.g., Node 18+).
+  * Package manager (`npm` or `yarn`).
+* **Configuration**:
+  * Requires an environment variable pointing to the backend API base URL (e.g., `VITE_API_URL` or `REACT_APP_API_URL`).
+* **Build & Execution**:
+  * Development server command (e.g., `npm run dev`).
+  * Production build command (e.g., `npm run build`), which outputs static assets suitable for serving via a web server like Nginx.
 
-### 3. Database Service (`/db` or external image)
-* **Role**: Persistent relational data store.
-* **Tech Stack**: MySQL or PostgreSQL.
-* **How it Works**:
-  * Stores tables for users, tasks, categories, and audit logs.
-  * Initializes root/admin credentials and creates the default application database via initialization environment variables.
-* **Dockerfile / Containerization Notes**:
-  * While you can use official images directly (`mysql:8.0` or `postgres:15-alpine`), if you choose to write a custom Dockerfile for it, you would typically extend the official image to inject custom `.sql` initialization scripts or custom configuration files (`my.cnf` / `postgresql.conf`) into the container entrypoint directory (`/docker-entrypoint-initdb.d/`).
+### 2. Backend (`/backend`)
+* **Description**: The server application processing incoming API requests and database queries.
+* **Dependencies & Runtime**:
+  * Language runtime (e.g., Node.js/Express, Python/FastAPI, or Go).
+  * Package manager or dependency manifest (`package.json`, `requirements.txt`, or `go.mod`).
+* **Configuration**:
+  * Relies on environment variables for database connection parameters and server port configuration.
+* **Build & Execution**:
+  * Package installation command.
+  * Application startup command (e.g., `npm start` or `python main.py`).
+
+### 3. Database (`/db`)
+* **Description**: Relational database management system (MySQL or PostgreSQL).
+* **Requirements**:
+  * Compatible database server instance.
+  * Initialization schema scripts for tables, indexes, and initial constraints.
 
 ---
 
 ## Environment Variables
 
-To run the application successfully, ensure your environment variables are properly configured (via `.env` files or Docker Compose environment blocks):
+Create a configuration file (such as `.env`) based on your deployment requirements. The application expects the following configuration keys:
 
-| Variable | Description | Example |
+| Variable | Description | Default / Example |
 | :--- | :--- | :--- |
-| `PORT` | Port on which the backend server listens | `5000` |
-| `DB_HOST` | Hostname of the database container or service | `db` or `localhost` |
-| `DB_PORT` | Database listening port | `3306` (MySQL) or `5432` (Postgres) |
-| `DB_USER` | Database username | `taskflow_user` |
-| `DB_PASSWORD` | Database user password | `secret_password` |
-| `DB_NAME` | Name of the application database | `taskflow_db` |
-| `REACT_APP_API_URL` / `VITE_API_URL` | Endpoint URL for frontend-to-backend communication | `http://localhost:5000` |
+| `PORT` | Port number for the backend server | `5000` |
+| `DB_HOST` | Database server hostname or IP | `localhost` |
+| `DB_PORT` | Database server listening port | `3306` (MySQL) or `5432` (Postgres) |
+| `DB_USER` | Database authentication username | `app_user` |
+| `DB_PASSWORD` | Database authentication password | `secure_password` |
+| `DB_NAME` | Target database instance name | `taskflow` |
+| `API_URL` | Frontend-to-backend communication endpoint | `http://localhost:5000` |
 
 ---
 
-## Getting Started Locally
+## Local Development Setup
 
-If you want to run services natively during development:
+To run the services natively for development and testing:
 
-1. **Database**: Ensure your local database service is running and create the required database instance.
-2. **Backend**:
+1. **Database Setup**:
+   * Start your database service and create an empty database instance matching your configuration.
+
+2. **Backend Setup**:
    ```bash
    cd backend
    # Install dependencies
-   npm install # or pip install -r requirements.txt
-   # Configure environment variables
-   cp .env.example .env
+   npm install
+   # Configure environment variables (.env)
    # Start the server
-   npm run dev # or python main.py
+   npm run dev
    ```
-3. **Frontend**:
+
+3. **Frontend Setup**:
    ```bash
    cd frontend
+   # Install dependencies
    npm install
+   # Start the development server
    npm run dev
    ```
